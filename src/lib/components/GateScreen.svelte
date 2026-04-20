@@ -41,7 +41,7 @@
     loading = true;
     error = '';
     try {
-      const res = await fetch(`${base}/invites`, { cache: 'no-store' });
+      const res = await fetch(`${base}/invite.json`, { cache: 'no-store' });
       if (!res.ok) throw new Error('Could not load invite list.');
       const data: { codes: string[] } = await res.json();
       const valid = (data.codes ?? []).map((c: string) => c.toLowerCase());
