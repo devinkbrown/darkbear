@@ -22,11 +22,19 @@
   import { video } from '$lib/stores/video.svelte.js';
 
   let hasAccess   = $state(false);  // gate: invite code passed
-  let showConnect = $state(true);   // always start on connect screen
+  let showConnect = $state(false);  // user explicitly opened connect modal (e.g. during reconnect)
   // Split panes: array of extra buffer pointers beyond the primary pane
   let splitPointers   = $state<string[]>([]);
   let splitHorizontal = $state(true); // true = stacked top/bottom, false = side by side
-  let clientVisible = $state(false); // fade-in the client after connect
+  // Derived directly from connection state — no intermediate effect, no blank-screen gap.
+  const clientVisible = $derived(
+    chat.connectionState === ConnectionState.CONNECTED ||
+    chat.connectionState === ConnectionState.RECONNECTING
+  );
+  // Show connect modal when not visibly connected, or when user explicitly requested it.
+  const showConnectModal = $derived(
+    hasAccess && (!clientVisible || (showConnect && chat.connectionState !== ConnectionState.CONNECTED))
+  );
   let showSettings = $state(false);
   let showBufferSwitcher = $state(false);
   let showSplitPicker    = $state(false);
@@ -148,17 +156,10 @@
     };
   });
 
+  // Reset showConnect flag once the connection is established so it doesn't
+  // linger open the modal after a successful reconnect.
   $effect(() => {
-    if (chat.connectionState === ConnectionState.CONNECTED) {
-      // Connected — dissolve the login screen into the client
-      showConnect = false;
-      clientVisible = true;
-    } else if (chat.connectionState === ConnectionState.DISCONNECTED) {
-      clientVisible = false;
-      showConnect = true;
-    } else if (chat.error) {
-      showConnect = true;
-    }
+    if (chat.connectionState === ConnectionState.CONNECTED) showConnect = false;
   });
 
   // Favicon badge: draw unread highlights count onto the favicon
@@ -300,7 +301,7 @@
       if (sidebarOpen && window.innerWidth < 1024) { sidebarOpen = false; return; }
       if (showBufferSwitcher) { showBufferSwitcher = false; return; }
       if (showSettings) { showSettings = false; return; }
-      if (showConnect) { showConnect = false; return; }
+      if (showConnectModal) { showConnect = false; return; }
     }
   }
 
@@ -816,7 +817,7 @@
           </button>
         {:else if chat.connectionState === ConnectionState.DISCONNECTED || chat.connectionState === ConnectionState.RECONNECTING || chat.connectionState === ConnectionState.ERROR}
           <button
-            onclick={() => (showConnect = true)}
+            onclick={() => { showConnect = true; }}
             class="text-xs px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white transition-colors font-medium ml-1"
           >
             Connect
@@ -906,7 +907,7 @@
 
 {#if !hasAccess}
   <GateScreen onaccess={() => (hasAccess = true)} />
-{:else if showConnect}
+{:else if showConnectModal}
   <div transition:fade={{ duration: 400 }}>
     <ConnectModal onclose={() => (showConnect = false)} />
   </div>
